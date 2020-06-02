@@ -1,0 +1,4 @@
+mechanicalsoup
+musicbrainzngs
+mutagen
+selenium
