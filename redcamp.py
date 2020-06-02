@@ -134,6 +134,8 @@ def print_album(album):
     print(f"Release Description:\n\n{make_description(album)}\n")
 
 def main():
+    global tag_blacklist
+
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter, prog='redcamp')
     parser.add_argument('--config', help='Location of configuration file', default=os.path.expanduser('~/.redcamp/config'))
     parser.add_argument('--download-releases', help='Download releases from file', action='store_true')
