@@ -1,5 +1,6 @@
 import sys
 import time
+import utils
 
 from os import path
 from datetime import datetime
@@ -11,6 +12,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import ElementNotInteractableException
 from selenium.webdriver.support import expected_conditions as EC
+
+blacklisted_tags = ["noise", "noisegrind", "harsh.noise"]
+cutoff_year = 2019
 
 def get_download_link(driver):
     driver.find_element_by_class_name("download-link.buy-link").click()
@@ -30,94 +34,85 @@ def get_download_link(driver):
     )
     return element.get_attribute("href")
 
+def main():
+    release_ct = int(input("Number of Releases: "))
 
-blacklisted_tags = ["noise", "noisegrind", "harsh.noise"]
-cutoff_year = 2019
-
-print("Number of Releases: ", end="")
-release_ct = int(input())
-
-if path.exists("./cache.txt"):
-    cache = open("./cache.txt", 'r').read().split("\n")
-else:
-    cache = []
-
-#Load Bandcamp
-driver = webdriver.Firefox()
-driver.get("https://bandcamp.com")
-driver.implicitly_wait(2)
-
-#Get New/Digital Releases
-driver.find_element_by_class_name("discover-pill.new").click()
-driver.find_element_by_class_name("discover-pill.digital").click()
-
-#Wait for Page
-WebDriverWait(driver, 5).until(
-    EC.element_to_be_clickable((By.XPATH, "//a[@class='item-page' and text()='next']"))
-)
-
-releases = []
-
-while len(releases) < release_ct:
-    #Get Releases
-    albums = driver.find_elements_by_xpath("//div[contains(@class, 'row discover-result') and contains(@class, 'result-current')]/div[@class='col col-3-12 discover-item']/a[2]")
-    for album in albums:
-        if len(releases) >= release_ct:
-            break
-
-        #Parse URL
-        parsed_url = urlparse(album.get_attribute("href"))
-        url = parsed_url.scheme + "://" + parsed_url.netloc + parsed_url.path
-
-        #Check Cache
-        if url in cache:
-            continue
-        cache.append(url)
-
-        #Open New Tab
-        driver.execute_script("window.open('');")
-        driver.switch_to.window(driver.window_handles[1])
-        driver.get(url)
-
-        #Check if Releases Matches Filters
-        try:
-            price_element = driver.find_element_by_class_name("buyItemExtra.buyItemNyp.secondaryText")
-            year_element = driver.find_element_by_xpath("//meta[@itemprop='datePublished']")
-            tag_element = driver.find_elements_by_xpath("//a[@class='tag']")
-
-            #Get Release Year
-            year = int(datetime.strptime(year_element.get_attribute("content"), "%Y%m%d").year)
-
-            #Check for Blacklisted Tag
-            blacklisted = False
-            for tag in tag_element:
-                if tag.text in blacklisted_tags:
-                    blacklisted = True
-                    break
-
-            #Check if Release is Free, Year >= Cutoff, and not Blacklisted
-            if price_element.text == "name your price" and year >= cutoff_year and not blacklisted:
-                download_link = get_download_link(driver)
-                if download_link:
-                    releases.append({"url": url, "download_link": download_link})
-        except NoSuchElementException:
-            pass
-        
-        #Close New Tab
-        driver.close()
-        driver.switch_to.window(driver.window_handles[0])
+    cache = utils.read_file("./cache.txt")
+    if cache:
+        cache = cache.split("\n")
     else:
-        #Load Next Page of Releases
-        WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//a[@class='item-page' and text()='next']"))).click()
+        cache = []
 
-driver.close()
+    #Load Bandcamp
+    driver = webdriver.Firefox()
+    driver.get("https://bandcamp.com")
+    driver.implicitly_wait(2)
 
-#Write URLs to File
-release_file = open("releases.txt", 'w')
-for release in releases:
-    release_file.write(release['url'] + ", " + release['download_link'] + "\n")
-release_file.close()
+    #Get New/Digital Releases
+    driver.find_element_by_class_name("discover-pill.new").click()
+    driver.find_element_by_class_name("discover-pill.digital").click()
 
-cache_file = open("cache.txt", 'w')
-cache_file.write("\n".join(cache))
-cache_file.close()
+    #Wait for Page
+    WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//a[@class='item-page' and text()='next']")))
+
+    releases = []
+
+    while len(releases) < release_ct:
+        #Get Releases
+        albums = driver.find_elements_by_xpath("//div[contains(@class, 'row discover-result') and contains(@class, 'result-current')]/div[@class='col col-3-12 discover-item']/a[2]")
+        for album in albums:
+            if len(releases) >= release_ct:
+                break
+
+            #Parse URL
+            parsed_url = urlparse(album.get_attribute("href"))
+            url = parsed_url.scheme + "://" + parsed_url.netloc + parsed_url.path
+
+            #Check Cache
+            if url in cache:
+                continue
+            cache.append(url)
+
+            #Open New Tab
+            driver.execute_script("window.open('');")
+            driver.switch_to.window(driver.window_handles[1])
+            driver.get(url)
+
+            #Check if Releases Matches Filters
+            try:
+                price_element = driver.find_element_by_class_name("buyItemExtra.buyItemNyp.secondaryText")
+                year_element = driver.find_element_by_xpath("//meta[@itemprop='datePublished']")
+                tag_element = driver.find_elements_by_xpath("//a[@class='tag']")
+
+                #Get Release Year
+                year = int(datetime.strptime(year_element.get_attribute("content"), "%Y%m%d").year)
+
+                #Check Tags
+                blacklisted = False
+                for tag in tag_element:
+                    if tag.text in blacklisted_tags:
+                        blacklisted = True
+                        break
+
+                #Check Price and Release Year
+                if price_element.text == "name your price" and year >= cutoff_year and not blacklisted:
+                    download_link = get_download_link(driver)
+                    if download_link:
+                        releases.append(f"{url}, {download_link}")
+            except NoSuchElementException:
+                pass
+            
+            #Close New Tab
+            driver.close()
+            driver.switch_to.window(driver.window_handles[0])
+        else:
+            #Load Next Page of Releases
+            WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, "//a[@class='item-page' and text()='next']"))).click()
+
+    driver.close()
+
+    utils.write_file("./releases.txt", "\n".join(releases))
+    utils.write_file("./cache.txt", "\n".join(cache))
+
+if __name__ == "__main__":
+    main()

@@ -3,6 +3,7 @@ import os
 import html
 import json
 import time
+import logging
 import requests
 import mechanicalsoup
 
@@ -16,46 +17,6 @@ headers = {
     'Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.3'
 }
 
-media_search_map = {
-    'cd': 'CD',
-    'dvd': 'DVD',
-    'vinyl': 'Vinyl',
-    'soundboard': 'Soundboard',
-    'sacd': 'SACD',
-    'dat': 'DAT',
-    'web': 'WEB',
-    'blu-ray': 'Blu-ray'
-}
-
-lossless_media = set(media_search_map.keys())
-
-formats = {
-    'FLAC': {
-        'format': 'FLAC',
-        'encoding': 'Lossless'
-    },
-    'V0': {
-        'format' : 'MP3',
-        'encoding' : 'V0 (VBR)'
-    },
-    '320': {
-        'format' : 'MP3',
-        'encoding' : '320'
-    },
-    'V2': {
-        'format' : 'MP3',
-        'encoding' : 'V2 (VBR)'
-    },
-}
-
-def allowed_transcodes(torrent):
-    """Some torrent types have transcoding restrictions."""
-    preemphasis = re.search(r"""pre[- ]?emphasi(s(ed)?|zed)""", torrent['remasterTitle'], flags=re.IGNORECASE)
-    if preemphasis:
-        return []
-    else:
-        return formats.keys()
-
 class LoginException(Exception):
     pass
 
@@ -63,7 +24,7 @@ class RequestException(Exception):
     pass
 
 class RedactedAPI:
-    def __init__(self, username=None, password=None, session_cookie=None):
+    def __init__(self, username=None, password=None, session_cookie=None, logger=None):
         self.session = requests.Session()
         self.session.headers.update(headers)
         self.username = username
@@ -74,7 +35,8 @@ class RedactedAPI:
         self.userid = None
         self.tracker = "https://flacsfor.me/"
         self.last_request = time.time()
-        self.rate_limit = 2.0 # seconds between requests
+        self.rate_limit = 2.0
+        self.logger = logger
         self._login()
 
     def _login(self):
@@ -82,12 +44,13 @@ class RedactedAPI:
             try:
                 self._login_cookie()
             except:
-                print("WARNING: session cookie attempted and failed")
+                self.logger.error("Invalid Session Cookie")
                 self._login_username_password()
         else:
             self._login_username_password()
 
     def _login_cookie(self):
+        '''Logs in user using session cookie'''
         mainpage = 'https://redacted.ch/'
         cookiedict = {"session": self.session_cookie}
         cookies = requests.utils.cookiejar_from_dict(cookiedict)
@@ -103,14 +66,12 @@ class RedactedAPI:
             raise LoginException
 
     def _login_username_password(self): 
-        '''Logs in user and gets authkey from server'''
-
+        '''Logs in user using username and password'''
         if not self.username or self.username == "":
-            print("WARNING: username authentication attempted, but username not set, skipping.")
+            self.logger.error("Username not set")
             raise LoginException
         loginpage = 'https://redacted.ch/login.php'
-        data = {'username': self.username,
-                'password': self.password}
+        data = {'username': self.username, 'password': self.password}
         r = self.session.post(loginpage, data=data)
         if r.status_code != 200:
             raise LoginException
@@ -148,6 +109,7 @@ class RedactedAPI:
             raise RequestException
 
     def get_artist(self, artist=None, format=None):
+        '''Get all releases for a given artist'''
         res = self.request('artist', artistname=artist)
         if 'torrentgroup' not in res:
             return {'torrentgroup': []}
@@ -167,9 +129,24 @@ class RedactedAPI:
         res['torrentgroup'] = keep_releases
         return res
 
+    def is_duplicate(self, release):
+        artist = release['artist']
+        if 'artists' in release and len(release['artists']):
+            artist = release['artists'][0]
+
+        group = self.get_artist(artist=artist, format="FLAC")
+        for result in group['torrentgroup']:
+            if result['groupName'] == release['album']:
+                for torrent in result['torrent']:
+                    if torrent['format'] == "FLAC" and torrent['encoding'] == release['bitrate']:
+                        return True
+                break
+
+        return False
+
     #RED has an API endpoint for uploads now: ajax.php?action=upload
     #This function will be rewritten to use API keys in the future
-    def upload(self, torrent, album):
+    def upload(self, torrent, release):
         browser = mechanicalsoup.StatefulBrowser(
             soup_config={'features': 'lxml'},
             raise_on_404=True
@@ -181,39 +158,37 @@ class RedactedAPI:
 
         form = browser.select_form('form[class="create_form"]')
 
-        if album['artist'] == "Various Artists":
-            form.set("artists[]", album['artists'][0])
+        if 'artists' in release and len(release['artists']):
+            form.set("artists[]", release['artists'][0])
         else:
-            form.set("artists[]", album['artist'])
+            form.set("artists[]", release['artist'])
         
-        if 'release_title' in album:
-            form.set("remaster_title", album['release_title'])
-        if 'record_label' in album:
-            form.set("remaster_record_label", album['record_label'])
-        if 'remaster_catalogue_number' in album:
-            form.set("remaster_catalogue_number", album['catalogue_number'])
+        if 'release_title' in release:
+            form.set("remaster_title", release['release_title'])
+        if 'record_label' in release:
+            form.set("remaster_record_label", release['record_label'])
+        if 'remaster_catalogue_number' in release:
+            form.set("remaster_catalogue_number", release['catalogue_number'])
 
-        if 'initial_year' in album:
-            form.set("year", album['initial_year'])
+        if 'initial_year' in release:
+            form.set("year", release['initial_year'])
         else:
-            form.set("year", album['release_year'])
+            form.set("year", release['release_year'])
 
         form.set("file_input", torrent)
         form.set("type", "0")
-        form.set("title", album['album'])
-        form.set("releasetype", album['release_type'])
-        form.set("remaster_year", album['release_year'])
+        form.set("title", release['album'])
+        form.set("releasetype", release['release_type'])
+        form.set("remaster_year", release['release_year'])
         form.set("format", "FLAC")
-        form.set("bitrate", album['bitrate'])
+        form.set("bitrate", release['bitrate'])
         form.set("media", "WEB")
-        form.set("tags", album['tags'])
-        form.set("image", album['cover_art'])
-        form.set("album_desc", album['description'])
-        form.set("release_desc", "Uploaded using [REDCamp](https://github.com/TrackerTools/REDCamp)")
+        form.set("tags", release['tags'])
+        form.set("image", release['cover_art'])
+        form.set("album_desc", release['album_description'])
+        form.set("release_desc", release['release_description'])
         
         browser.submit_selected()
-
-        #print(browser.get_current_page())
 
         return browser.get_url()
 

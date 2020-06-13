@@ -11,8 +11,9 @@
 ## Installation
 ### Dependencies
 * Python 3.5 or newer
-* `mechanicalsoup`, `musicbrainzngs`, `mutagen`, and `selenium` Python modules. You can install these with `pip install -r requirements.txt`. Depending on your user priveleges, you may need to use `sudo`, so try: `sudo -H pip install -r requirements.txt`
+* `coloredlogs`, `mechanicalsoup`, `musicbrainzngs`, `mutagen`, `ptpimg_uploader`, and `selenium` Python modules. You can install these with `pip install -r requirements.txt`. Depending on your user priveleges, you may need to use `sudo`, so try: `sudo -H pip install -r requirements.txt`
 * [`geckodriver`](https://github.com/mozilla/geckodriver/releases): This requires Firefox and a desktop environment. Make sure it’s in your PATH, e.g., place it in /usr/bin or /usr/local/bin.
+* [`sox`](http://sox.sourceforge.net/): This should be available on your package manager of choice.
 * [`mktorrent`](https://github.com/Rudde/mktorrent): Just installing it with a package manager won't do in this case. We need to build it from source, because otherwise an option that we need is not enabled. For Linux systems, run the following commands in a temporary directory:
 
 ~~~~
@@ -71,9 +72,14 @@ To process and upload the releases in `output_dir`:
 
     $> ./redcamp.py
 
-If your releases are downloaded automatically REDCamp caches the URLs for later use, otherwise it will attempt to search Bandcamp for the album. Releases from Bandcamp follow the format "<artist> - <album>.zip".
+If your releases are downloaded automatically REDCamp caches the URLs for later use, otherwise it will attempt to search Bandcamp for the album. Releases from Bandcamp follow the format "\<artist> - \<album>.zip".
 Releases are tagged using metadata from Bandcamp and MusicBrainz. If information is missing it will prompt the user to enter it manually. The script also checks if a release is a duplicate on Redacted and skips it.
 
 ## Bugs and Feature Requests
 
 If you have any issues using the script, or would like to suggest a feature, feel free to open an issue in the issue tracker, *provided that you have searched for similar issues already*. Pull requests are also welcome.
+
+## Credits
+* [Mechazawa](https://github.com/Mechazawa) for [REDBetter](https://github.com/Mechazawa/REDBetter-crawler)
+* [AnstrommFeck](https://redacted.ch/user.php?id=7191) for [mkspectrograms.sh](https://redacted.ch/forums.php?action=viewthread&threadid=42695)
+* [Lossless Audio Checker](http://losslessaudiochecker.com/)

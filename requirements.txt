@@ -1,4 +1,6 @@
+coloredlogs
 mechanicalsoup
 musicbrainzngs
 mutagen
+ptpimg_uploader
 selenium
