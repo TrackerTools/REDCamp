@@ -5,15 +5,15 @@
 * This script is meant as a helper tool, not a fully automated uploader. **Please review all your uploads before making them.** Failure to do so can result in a warning or worse.
 * Bandcamp has no restrictions on what can be uploaded. The script has no way to discern a good release from a "spam release". Please make sure your upload meets the criteria before uploading.
 > Zero Effort, Spam Releases - Creators that prolifically release zero effort content of no value (e.g Paul_DVR, Vap0rwave, Firmensprecher, Phyllomedusa, stretches), often solely for the purpose of spam or upload gain.
-* Although most FLACs on Bandcamp are true lossless, some are lossy that have been transcoded. The script does not check spectrals, and failure to report a lossy WEB after uploading can result in a warning.
+* Although most FLACs on Bandcamp are true lossless, some are lossy that have been transcoded. The script uses Lossless Audio Checker to check for possible transcodes, but it isn't 100% accurate. Please check the spectrals for each release before uploading.
 * The script is not perfect, and sometimes makes mistakes. Use at your own risk.
 
 ## Installation
 ### Dependencies
 * Python 3.5 or newer
 * `coloredlogs`, `mechanicalsoup`, `musicbrainzngs`, `mutagen`, `ptpimg_uploader`, and `selenium` Python modules. You can install these with `pip install -r requirements.txt`. Depending on your user priveleges, you may need to use `sudo`, so try: `sudo -H pip install -r requirements.txt`
+* `sox`: This should be available on your package manager of choice.
 * [`geckodriver`](https://github.com/mozilla/geckodriver/releases): This requires Firefox and a desktop environment. Make sure it’s in your PATH, e.g., place it in /usr/bin or /usr/local/bin.
-* [`sox`](http://sox.sourceforge.net/): This should be available on your package manager of choice.
 * [`mktorrent`](https://github.com/Rudde/mktorrent): Just installing it with a package manager won't do in this case. We need to build it from source, because otherwise an option that we need is not enabled. For Linux systems, run the following commands in a temporary directory:
 
 ~~~~
@@ -40,6 +40,7 @@ Open this file in your preferred text editor, and configure as desired. The opti
 * `data_dir`: The directory where your torrent downloads are stored.
 * `output_dir`: The directory where the releases will be downloaded to.
 * `torrent_dir`: The directory where the generated `.torrent` files are stored.
+* `api_key`: Your ptpimg.me API key. To find it, login to https://ptpimg.me, open the page source (i.e. "View -> Developer -> View source" menu in Chrome), find the string api_key and copy the hexademical string from the value attribute.
 
 You should also edit the variables `blacklisted_tags` and `cutoff_year` in `scrape.py`
 

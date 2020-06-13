@@ -349,6 +349,7 @@ def main():
             logger.warning(f"Please Check Spectrals")
 
         #Generate Spectrograms
+        logger.info("Generating Spectrograms")
         spectral_links = transcode.make_spectrograms(release_dir, config.get('ptpimg', 'api_key'))
         release['release_description'] = make_release_desc(release, spectral_links)
 
