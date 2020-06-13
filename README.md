@@ -10,9 +10,9 @@
 
 ## Installation
 ### Dependencies
-* Python 3.5 or newer
-* `coloredlogs`, `mechanicalsoup`, `musicbrainzngs`, `mutagen`, `ptpimg_uploader`, and `selenium` Python modules. You can install these with `pip install -r requirements.txt`. Depending on your user priveleges, you may need to use `sudo`, so try: `sudo -H pip install -r requirements.txt`
-* `sox`: This should be available on your package manager of choice.
+* Python 3.6 or newer
+* `coloredlogs`, `mechanicalsoup`, `musicbrainzngs`, `mutagen`, `ptpimg_uploader`, and `selenium` Python modules. You can install these with `pip install -r requirements.txt`. Depending on your user privileges, you may need to use `sudo`, so try: `sudo -H pip install -r requirements.txt`
+* `ffmpeg` and `sox`: These should all be available on your package manager of choice.
 * [`geckodriver`](https://github.com/mozilla/geckodriver/releases): This requires Firefox and a desktop environment. Make sure it’s in your PATH, e.g., place it in /usr/bin or /usr/local/bin.
 * [`mktorrent`](https://github.com/Rudde/mktorrent): Just installing it with a package manager won't do in this case. We need to build it from source, because otherwise an option that we need is not enabled. For Linux systems, run the following commands in a temporary directory:
 
@@ -23,6 +23,8 @@ $> make && sudo make install
 ~~~~
 
 If you are on a seedbox and you lack the privileges to install packages, you are best off contacting your seedbox provider and asking them to install the listed packages.
+
+`setup.sh` will install all of the necessary dependencies (requires root).
 
 ### Configuration
 Run `redcamp` by running the script included when you cloned the repository:
