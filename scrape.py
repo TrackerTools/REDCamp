@@ -6,12 +6,15 @@ from os import path
 from datetime import datetime
 from urllib.parse import urlparse
 
+import geckodriver_autoinstaller
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
+from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.common.exceptions import NoSuchElementException
-from selenium.common.exceptions import ElementNotInteractableException
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import ElementNotInteractableException
 
 blacklisted_tags = ["noise", "noisegrind", "harsh.noise"]
 cutoff_year = 2019
@@ -43,8 +46,14 @@ def main():
     else:
         cache = []
 
+    #Install geckodriver
+    geckodriver_autoinstaller.install()
+
+    options = Options()
+    options.headless = True
+    driver = webdriver.Firefox(options=options)
+
     #Load Bandcamp
-    driver = webdriver.Firefox()
     driver.get("https://bandcamp.com")
     driver.implicitly_wait(2)
 
@@ -98,6 +107,7 @@ def main():
                 if price_element.text == "name your price" and year >= cutoff_year and not blacklisted:
                     download_link = get_download_link(driver)
                     if download_link:
+                        print(f"Match: {url}")
                         releases.append(f"{url}, {download_link}")
             except NoSuchElementException:
                 pass

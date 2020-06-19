@@ -5,7 +5,8 @@ import json
 import time
 import logging
 import requests
-import mechanicalsoup
+
+import utils
 
 headers = {
     'Connection': 'keep-alive',
@@ -17,6 +18,24 @@ headers = {
     'Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.3'
 }
 
+types = {
+    "Album": 1,
+    "Soundtrack": 3,
+    "EP": 5,
+    "Anthology": 6,
+    "Compilation": 7,
+    "Single": 9,
+    "Live album": 11,
+    "Remix": 13,
+    "Bootleg": 14,
+    "Interview": 15,
+    "Mixtape": 16,
+    "Demo": 17,
+    "Concert Recording": 18,
+    "DJ Mix": 19,
+    "Unknown": 21
+}
+
 class LoginException(Exception):
     pass
 
@@ -24,15 +43,12 @@ class RequestException(Exception):
     pass
 
 class RedactedAPI:
-    def __init__(self, username=None, password=None, session_cookie=None, logger=None):
+    def __init__(self, api_key=None, logger=None):
         self.session = requests.Session()
         self.session.headers.update(headers)
-        self.username = username
-        self.password = password
-        self.session_cookie = session_cookie
+        self.api_key = api_key
         self.authkey = None
         self.passkey = None
-        self.userid = None
         self.tracker = "https://flacsfor.me/"
         self.last_request = time.time()
         self.rate_limit = 2.0
@@ -40,51 +56,16 @@ class RedactedAPI:
         self._login()
 
     def _login(self):
-        if self.session_cookie is not None:
-            try:
-                self._login_cookie()
-            except:
-                self.logger.error("Invalid Session Cookie")
-                self._login_username_password()
-        else:
-            self._login_username_password()
-
-    def _login_cookie(self):
-        '''Logs in user using session cookie'''
+        '''Logs in user using API key'''
         mainpage = 'https://redacted.ch/'
-        cookiedict = {"session": self.session_cookie}
-        cookies = requests.utils.cookiejar_from_dict(cookiedict)
 
-        self.session.cookies.update(cookies)
-        r = self.session.get(mainpage)
+        self.session.headers.update(Authorization=self.api_key)
         try:
             accountinfo = self.request('index')
             self.authkey = accountinfo['authkey']
             self.passkey = accountinfo['passkey']
-            self.userid = accountinfo['id']
         except:
             raise LoginException
-
-    def _login_username_password(self): 
-        '''Logs in user using username and password'''
-        if not self.username or self.username == "":
-            self.logger.error("Username not set")
-            raise LoginException
-        loginpage = 'https://redacted.ch/login.php'
-        data = {'username': self.username, 'password': self.password}
-        r = self.session.post(loginpage, data=data)
-        if r.status_code != 200:
-            raise LoginException
-        try:
-            accountinfo = self.request('index')
-            self.authkey = accountinfo['authkey']
-            self.passkey = accountinfo['passkey']
-            self.userid = accountinfo['id']
-        except:
-            raise LoginException
-
-    def logout(self):
-        self.session.get("https://redacted.ch/logout.php?auth=%s" % self.authkey)
 
     def request(self, action, **kwargs):
         '''Makes an AJAX request at a given action page'''
@@ -93,8 +74,6 @@ class RedactedAPI:
 
         ajaxpage = 'https://redacted.ch/ajax.php'
         params = {'action': action}
-        if self.authkey:
-            params['auth'] = self.authkey
         params.update(kwargs)
         r = self.session.get(ajaxpage, params=params, allow_redirects=False)
         self.last_request = time.time()
@@ -106,6 +85,7 @@ class RedactedAPI:
                 raise RequestException
             return parsed['response']
         except ValueError:
+            print(r.status_code)
             raise RequestException
 
     def get_artist(self, artist=None, format=None):
@@ -144,64 +124,55 @@ class RedactedAPI:
 
         return False
 
-    #RED has an API endpoint for uploads now: ajax.php?action=upload
-    #This function will be rewritten to use API keys in the future
     def upload(self, torrent, release):
-        browser = mechanicalsoup.StatefulBrowser(
-            soup_config={'features': 'lxml'},
-            raise_on_404=True
-        )
-
-        browser.session.headers = self.session.headers
-        browser.session.cookies = self.session.cookies
-        browser.open("https://redacted.ch/upload.php")
-
-        form = browser.select_form('form[class="create_form"]')
+        upload = {}
 
         if 'artists' in release and len(release['artists']):
-            form.set("artists[]", release['artists'][0])
+            for i, artist in enumerate(release['artists']):
+                upload[f"artists[{i}]"] = artist
+                upload[f"importance[{i}]"] = 1
         else:
-            form.set("artists[]", release['artist'])
-        
+            upload["artists[]"] = release['artist']
+            upload["importance[]"] = 1
+
         if 'release_title' in release:
-            form.set("remaster_title", release['release_title'])
+            upload["remaster_title"] = release['release_title']
         if 'record_label' in release:
-            form.set("remaster_record_label", release['record_label'])
+            upload["remaster_record_label"] = release['record_label']
         if 'remaster_catalogue_number' in release:
-            form.set("remaster_catalogue_number", release['catalogue_number'])
+            upload["remaster_catalogue_number"] = release['catalogue_number']
 
         if 'initial_year' in release:
-            form.set("year", release['initial_year'])
+            upload["year"] = int(release['initial_year'])
         else:
-            form.set("year", release['release_year'])
+            upload["year"] = int(release['release_year'])
 
-        form.set("file_input", torrent)
-        form.set("type", "0")
-        form.set("title", release['album'])
-        form.set("releasetype", release['release_type'])
-        form.set("remaster_year", release['release_year'])
-        form.set("format", "FLAC")
-        form.set("bitrate", release['bitrate'])
-        form.set("media", "WEB")
-        form.set("tags", release['tags'])
-        form.set("image", release['cover_art'])
-        form.set("album_desc", release['album_description'])
-        form.set("release_desc", release['release_description'])
-        
-        browser.submit_selected()
+        upload["type"] = 0
+        upload["title"] = release['album']
+        upload["releasetype"] = types[release['release_type']]
+        upload["remaster_year"] = int(release['release_year'])
+        upload["format"] = "FLAC"
+        upload["bitrate"] = release['bitrate']
+        upload["media"] = "WEB"
+        upload["tags"] = release['tags']
+        upload["image"] = release['cover_art']
+        upload["album_desc"] = release['album_description']
+        upload["release_desc"] = release['release_description']
 
-        return browser.get_url()
+        files = {'file_input': open(torrent, 'rb')}
 
-    def add_artist(self, permalink, artist):
-        browser = mechanicalsoup.StatefulBrowser(
-            soup_config={'features': 'lxml'},
-            raise_on_404=True
-        )
+        r = self.session.post('https://redacted.ch/ajax.php?action=upload', data=upload, files=files)
+        return json.loads(r.content)
 
-        browser.session.headers = self.session.headers
-        browser.session.cookies = self.session.cookies
-        browser.open(permalink)
+    #We have to use a session cookie here because the API doesn't have a report endpoint
+    def report_lossy(self, session_cookie, torrent, image, url):
+        cookies = {'session': session_cookie}
+        data = {'categoryid': 1, 'submit': True, 'type': 'lossywebapproval'}
 
-        form = browser.select_form('form[class="add_form"]', 1)
-        form.set("aliasname[]", artist)
-        browser.submit_selected()
+        data['auth'] = self.authkey
+        data['torrentid'] = int(torrent)
+        data['proofimages'] = image
+        data['extra'] = f"Downloaded from [url={url}]Bandcamp[/url]"
+
+        r = requests.post('https://redacted.ch/reportsv2.php?action=takereport', cookies=cookies, data=data, headers=headers)
+        return r.content

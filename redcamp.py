@@ -9,14 +9,20 @@ import re
 import os
 import sys
 import json
-import shutil
-import mutagen
+
 import argparse
 import configparser
+import hashlib
+import shutil
 import urllib.error
 import urllib.request
+
+import coloredlogs
+import logging
+import verboselogs
+
 import musicbrainzngs
-import coloredlogs, logging
+import mutagen
 
 allowed_extensions = [".ac3", ".accurip", ".azw3", ".chm", ".cue", ".djv", ".djvu", ".doc", ".dmg", ".dts", ".epub", ".ffp", ".flac", ".gif", ".htm", ".html", ".jpeg", ".jpg", ".lit", ".log", ".m3u", ".m3u8", ".m4a", ".m4b", ".md5", ".mobi", ".mp3", ".mp4", ".nfo", ".pdf", ".pls", ".png", ".rtf", ".sfv", ".txt"]
 
@@ -48,6 +54,7 @@ type_matches = {
     "Soundtrack": "Soundtrack"
 }
 
+verboselogs.install()
 logger = logging.getLogger(__name__)
 coloredlogs.DEFAULT_LOG_FORMAT='%(levelname)s %(message)s'
 coloredlogs.install(level='INFO', logger=logger)
@@ -148,13 +155,13 @@ def make_album_desc(release):
     return description
 
 def make_release_desc(release, links):
-    description = "Uploaded using [url=https://github.com/TrackerTools/REDCamp]REDCamp[/url]\n\n"
-    description += "[hide=Spectrograms]\n"
+    description = "[hide=Spectrograms]\n"
 
     for link in links:
         description += f"[img]{link}[/img]\n"
     
     description += "[/hide]"
+    description += "\n\nUploaded using [url=https://github.com/TrackerTools/REDCamp]REDCamp[/url]"
 
     return description
 
@@ -168,7 +175,7 @@ def make_tagstr(release):
     tags = []
     for tag in release['tags']:
         tag = re.sub(r'[ _\-\/]', '.', tag).strip(".")
-        tag = tag.replace("&", "and").replace("'", "")
+        tag = re.sub(r'[\'\(\)]', '', tag.replace("&", "and"))
         if tag not in blacklist and tag not in tags:
             tags.append(tag)
 
@@ -217,8 +224,7 @@ def main():
         if not os.path.exists(os.path.dirname(args.config)):
             os.makedirs(os.path.dirname(args.config))
         config.add_section('redacted')
-        config.set('redacted', 'username', '')
-        config.set('redacted', 'password', '')
+        config.set('redacted', 'api_key', '')
         config.set('redacted', 'session_cookie', '')
         config.set('redacted', 'data_dir', '')
         config.set('redacted', 'output_dir', '')
@@ -243,8 +249,8 @@ def main():
 
     #Download Releases
     if args.download_releases:
-        for release in utils.read_file(args.release_file).split("\n"):
-            release_url, download_link = release.strip().split(", ")
+        for release in utils.read_file(args.release_file).strip().split("\n"):
+            release_url, download_link = release.split(", ")
 
             try:
                 response = urllib.request.urlopen(download_link)
@@ -273,8 +279,7 @@ def main():
     #Write Cache
     utils.write_file(args.cache, json.dumps(cache, indent=4, sort_keys=True))
 
-    username = config.get('redacted', 'username')
-    password = config.get('redacted', 'password')
+    api_key = config.get('redacted', 'api_key')
 
     try:
         session_cookie = os.path.expanduser(config.get('redacted', 'session_cookie'))
@@ -282,7 +287,7 @@ def main():
         session_cookie = None
 
     logger.info("Logging in to RED")
-    api = redacted.RedactedAPI(username, password, session_cookie, logger)
+    api = redacted.RedactedAPI(api_key, logger)
 
     logger.info("Logging in to MusicBrainz")
     musicbrainzngs.set_useragent("REDCamp", "1.0", "https://github.com/TrackerTools/REDCamp")
@@ -408,22 +413,30 @@ def main():
             break
 
         #Make Torrent
-        torrent = os.path.join(output_dir, utils.slugify(release['album'])) + ".torrent"
+        torrent = os.path.join(output_dir, f"redcamp_{str(int(hashlib.md5(release_file.encode('utf-8')).hexdigest(), 16))[0:12]}.torrent")
         if not os.path.exists(torrent):
             transcode.make_torrent(torrent, release_dir, api.tracker, api.passkey, config.get('redacted', 'piece_length'))
 
         #Upload to RED
-        permalink = api.upload(torrent, release)
-
-        #Add Artists
-        if 'artists' in release and len(release['artists']):
-            for artist in release['artists']:
-                api.add_artist(permalink, artist)
-
-        #Move Torrent to Watch Folder
-        shutil.move(torrent, torrent_dir)
+        response = api.upload(torrent, release)
         
-        #Cleanup
+        if response['status'] == 'failure':
+            logging.error(f"Upload Failed: {response['error']}")
+            shutil.rmtree(release_dir)
+            os.remove(torrent)
+            continue
+
+        torrentid = response['response']['torrentid']
+        logger.success(f"Uploaded to https://redacted.ch/torrents.php?torrentid={torrentid}")
+
+        shutil.move(torrent, torrent_dir)
+
+        #Report Lossy WEB
+        if session_cookie:
+            option = input("Report Lossy WEB? [y/n]: ")
+            if option == "y":
+                api.report_lossy(session_cookie, torrentid, spectral_links[0], release['url'])
+
         os.remove(release_path)
 
 if __name__ == "__main__":

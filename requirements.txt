@@ -4,3 +4,4 @@ musicbrainzngs
 mutagen
 ptpimg_uploader
 selenium
+verboselogs
