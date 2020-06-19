@@ -1,5 +1,5 @@
 coloredlogs
-mechanicalsoup
+geckodriver_autoinstaller
 musicbrainzngs
 mutagen
 ptpimg_uploader

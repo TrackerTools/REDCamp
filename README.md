@@ -20,7 +20,7 @@
 
 
 ## Installation
-:information_source: If you have Python installed, run `setup.sh` to install and configure all of the necessary dependencies (requires sudo).
+> :information_source: If you have Python installed, run `setup.sh` to install and configure all of the necessary dependencies (requires sudo).
 
 #### 1. Install Python
 
@@ -61,7 +61,7 @@ tar xzvf LAC-Linux-64bit.tar.gz
 rm LAC-Linux-64bit.tar.gz
 ~~~~
 
-:information_source: Step 6 and 7 only required if you want to run `scrape.py`.
+> :information_source: Step 6 and 7 only required if you want to run `scrape.py`.
 
 #### 6. Install Firefox
 
