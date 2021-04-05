@@ -5,3 +5,4 @@ mutagen
 ptpimg_uploader
 selenium
 verboselogs
+bs4
